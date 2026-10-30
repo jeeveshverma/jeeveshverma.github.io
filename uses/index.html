@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uses — Jeevesh Verma</title>
+<meta name="description" content="The tools Jeevesh Verma uses for test automation, API testing, performance and CI/CD.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="Uses — Jeevesh Verma">
+<meta property="og:description" content="The tools Jeevesh Verma uses for test automation, API testing, performance and CI/CD.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jeeveshverma.github.io/uses/">
+<link rel="canonical" href="https://jeeveshverma.github.io/uses/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/">Notes</a>
+      <a href="/uses/" aria-current="page">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+<main>
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><span>uses</span></nav>
+      <span class="eyebrow">Uses</span>
+      <h1 style="margin-top:20px">The kit behind<br><span class="grad">the green builds.</span></h1>
+      <p class="lede">What I reach for day to day, from the first assertion to the last pipeline run. If a tool isn't here, I haven't earned an opinion on it yet.</p>
+    </div>
+  </section>
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+      <li><a href="#languages">Languages</a></li><li><a href="#automation">Test automation</a></li><li><a href="#api">API &amp; backend</a></li>
+      <li><a href="#perf">Performance</a></li><li><a href="#ci">CI/CD &amp; infra</a></li><li><a href="#reporting">Reporting</a></li><li><a href="#site">This site</a></li></ol></aside>
+    <article class="prose">
+      <section id="languages" class="reveal"><h2><span class="n">01</span>Languages</h2>
+        <ul><li><strong>Java</strong> for API suites: REST Assured, TestNG, JUnit and AssertJ.</li>
+        <li><strong>Python</strong> for PyTest suites and quick scripts with Requests.</li>
+        <li><strong>Go</strong> for side projects, using the standard library only. See <a href="/work/linkforge/">linkforge</a> and <a href="/work/workq/">workq</a>.</li></ul></section>
+      <section id="automation" class="reveal"><h2><span class="n">02</span>Test automation</h2>
+        <ul><li><strong>REST Assured + TestNG</strong>: my default for API regression in Java.</li>
+        <li><strong>PyTest</strong>: fixtures and parametrisation for data-driven suites.</li>
+        <li><strong>Cucumber</strong> when the people reading the tests aren't engineers.</li>
+        <li><strong>Selenium</strong> for browser coverage.</li>
+        <li><strong>JSON-driven test design</strong>: test data lives next to the test, not inside it.</li></ul></section>
+      <section id="api" class="reveal"><h2><span class="n">03</span>API &amp; backend</h2>
+        <ul><li><strong>Postman</strong> for exploring an API before I automate it.</li>
+        <li><strong>curl</strong> for the quick check.</li>
+        <li>Integration, auth and permission-flow testing, plus crawl, indexing and search-result validation for search systems.</li></ul></section>
+      <section id="perf" class="reveal"><h2><span class="n">04</span>Performance</h2>
+        <ul><li><strong>JMeter</strong> for load and performance runs on high-priority flows.</li>
+        <li><code>go test -bench</code> with <code>-benchmem</code> for my own code. Allocations are a number, not a feeling.</li></ul></section>
+      <section id="ci" class="reveal"><h2><span class="n">05</span>CI/CD &amp; infra</h2>
+        <ul><li><strong>Jenkins</strong> and <strong>GitHub Actions</strong> to run suites on every change.</li>
+        <li><strong>Docker</strong> and <strong>Kubernetes</strong> to test against something close to production.</li>
+        <li><strong>Spinnaker</strong> for releases, and <strong>GCP</strong> services, including Secret Manager.</li>
+        <li><strong>Git</strong>, always.</li></ul></section>
+      <section id="reporting" class="reveal"><h2><span class="n">06</span>Reporting</h2>
+        <ul><li><strong>Allure</strong> reports, so a failure has a readable story.</li>
+        <li>CI results posted to <strong>Slack</strong>, so the team sees a red run before anyone asks.</li></ul>
+        <div class="callout"><span class="label">Rule of thumb</span><p>A test report is for the person who didn't write the test. If they can't tell what broke from the report alone, the report is the bug.</p></div></section>
+      <section id="site" class="reveal"><h2><span class="n">07</span>This site</h2>
+        <p>Hand-written HTML, CSS and a little JavaScript, with no framework or build step. It's hosted on GitHub Pages, set in Inter and JetBrains Mono.</p></section>
+    </article>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

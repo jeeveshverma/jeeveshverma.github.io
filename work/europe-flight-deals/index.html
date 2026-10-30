@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>europe-flight-deals — Jeevesh Verma</title>
+<meta name="description" content="europe-flight-deals: a Java automation that scans India to Europe round-trip fares through the Amadeus API every morning and surfaces anything under ₹20,000.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="europe-flight-deals — Jeevesh Verma">
+<meta property="og:description" content="A daily Java scan of India to Europe fares, flagging anything under ₹20,000.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://jeeveshverma.github.io/work/europe-flight-deals/">
+<link rel="canonical" href="https://jeeveshverma.github.io/work/europe-flight-deals/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/" aria-current="page">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/">Notes</a>
+      <a href="/uses/">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+<main>
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/work/">work</a><span aria-hidden="true">/</span><span>europe-flight-deals</span></nav>
+      <span class="eyebrow">Project 03 · Java</span>
+      <h1 style="margin-top:20px"><span class="us">~/</span>europe-flight-<span class="grad">deals</span><span class="us">_</span></h1>
+      <p class="lede">Sub-₹20,000 return fares from India to Europe do exist, and they vanish within hours. This automation checks every morning so I don't have to: it scans round trips from 7 Indian airports to 22 European ones through the Amadeus API and ranks anything under the threshold.</p>
+      <div class="hero-actions">
+        <a class="pill solid" href="https://github.com/jeeveshverma/europe-flight-deals-india">View on GitHub
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M6 4h6v6"/></svg></a>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b>7 → 22</b><span>Origins to destinations</span></div>
+        <div class="metric"><b>154</b><span>Route searches per run</span></div>
+        <div class="metric"><b>₹20k</b><span>Default price threshold</span></div>
+        <div class="metric"><b>Daily</b><span>03:00 UTC, 8:30 IST</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#what">What it does</a></li>
+        <li><a href="#scan">The scan loop</a></li>
+        <li><a href="#auth">Tokens and 401s</a></li>
+        <li><a href="#currency">Prices in rupees</a></li>
+        <li><a href="#testing">Tests</a></li>
+        <li><a href="#ci">CI and the daily run</a></li>
+      </ol>
+    </aside>
+
+    <article class="prose">
+      <section id="what" class="reveal">
+        <h2><span class="n">01</span>What it does</h2>
+        <ol>
+          <li>Reads Amadeus credentials and search settings from <code>application.properties</code>.</li>
+          <li>Searches round-trip fares from DEL, BOM, BLR, MAA, HYD, CCU and AMD.</li>
+          <li>Checks 22 European destinations, from London and Paris to Budapest, Warsaw and Istanbul.</li>
+          <li>Converts every price to INR and keeps the deals under the threshold.</li>
+          <li>Prints them ranked by price, each with a Google Flights link.</li>
+        </ol>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>sample output</div>
+<pre><code>Found 2 deal(s) under ₹20,000:
+
+ 1. <span class="ok">₹18,450</span> | DEL → BUD (Budapest) | 2026-08-24 → 2026-09-07 | W6 | 1 stop(s)
+ 2. <span class="ok">₹19,200</span> | BOM → WAW (Warsaw)   | 2026-08-24 → 2026-09-07 | LO | 1 stop(s)</code></pre></div>
+        <p>The threshold, how far ahead to search, the trip length and both airport lists are all configurable.</p>
+      </section>
+
+      <section id="scan" class="reveal">
+        <h2><span class="n">02</span>The scan loop</h2>
+        <p>One search per origin and destination pair, 250ms apart to stay inside the API's rate limit. A failed search is logged and skipped, so one bad route can't sink the whole run.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>AmadeusFlightService.java</div>
+<pre><code><span class="k">for</span> (String origin : config.originAirports()) {
+    <span class="k">for</span> (Airport destination : europeDestinations) {
+        <span class="k">try</span> {
+            Optional&lt;FlightDeal&gt; cheapest =
+                    searchCheapestRoundTrip(origin, destination, departure, returnDate);
+            cheapest.ifPresent(deal -&gt; {
+                <span class="k">if</span> (deal.priceInr() &lt;= config.maxPriceInr()) {
+                    allDeals.add(deal);
+                    log.info(<span class="s">"DEAL FOUND: {}"</span>, deal);
+                }
+                <span class="c">// ...</span>
+            });
+            Thread.sleep(250);
+        } <span class="k">catch</span> (Exception e) {
+            log.warn(<span class="s">"Search failed for {} → {}: {}"</span>, origin, destination.iataCode(), e.getMessage());
+        }
+    }
+}
+allDeals.sort(Comparator.comparingDouble(FlightDeal::priceInr));</code></pre></div>
+      </section>
+
+      <section id="auth" class="reveal">
+        <h2><span class="n">03</span>Tokens and 401s</h2>
+        <p>Amadeus uses OAuth client credentials. The service caches the access token with its expiry and fetches a new one only when needed. If a search comes back <code>401</code> anyway, it drops the token, re-authenticates once and retries the same request.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>AmadeusFlightService.java</div>
+<pre><code>HttpResponse&lt;String&gt; response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+<span class="k">if</span> (response.statusCode() == 401) {
+    accessToken = null;
+    ensureToken();
+    response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+}
+<span class="k">if</span> (response.statusCode() != 200) {
+    <span class="k">return</span> Optional.empty();
+}</code></pre></div>
+        <p>Any other non-200 status is treated as "no deal for this route", not a crash.</p>
+      </section>
+
+      <section id="currency" class="reveal">
+        <h2><span class="n">04</span>Prices in rupees</h2>
+        <p>The search asks Amadeus for <code>currencyCode=INR</code> directly. If an offer still comes back in another currency, <code>CurrencyConverter</code> converts it, caching one rate per currency in a <code>ConcurrentHashMap</code>.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>CurrencyConverter.java</div>
+<pre><code><span class="k">public double</span> <span class="f">toInr</span>(<span class="k">double</span> amount, String currency) {
+    <span class="k">if</span> (currency == null || currency.isBlank() || <span class="s">"INR"</span>.equalsIgnoreCase(currency)) {
+        <span class="k">return</span> amount;
+    }
+    <span class="k">double</span> rate = getRateToInr(currency.toUpperCase());
+    <span class="k">return</span> amount * rate;
+}
+
+<span class="k">private double</span> <span class="f">getRateToInr</span>(String currency) {
+    <span class="k">return</span> cache.computeIfAbsent(currency, <span class="k">this</span>::fetchRate);
+}</code></pre></div>
+      </section>
+
+      <section id="testing" class="reveal">
+        <h2><span class="n">05</span>Tests</h2>
+        <p>The unit tests pin down the parts that decide whether a fare counts as a deal: currency conversion and configuration defaults.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>CurrencyConverterTest.java</div>
+<pre><code><span class="k">@Test</span>
+<span class="k">void</span> <span class="f">convertsInrAsIdentity</span>() {
+    CurrencyConverter converter = <span class="k">new</span> CurrencyConverter(HttpClient.newHttpClient(), <span class="s">"https://test.api.amadeus.com"</span>);
+    assertEquals(15000, converter.toInr(15000, <span class="s">"INR"</span>), 0.01);
+}
+
+<span class="k">@Test</span>
+<span class="k">void</span> <span class="f">convertsEurUsingFallbackRate</span>() {
+    CurrencyConverter converter = <span class="k">new</span> CurrencyConverter(HttpClient.newHttpClient(), <span class="s">"https://test.api.amadeus.com"</span>);
+    <span class="k">double</span> inr = converter.toInr(100, <span class="s">"EUR"</span>);
+    assertEquals(9000, inr, 0.01);
+}</code></pre></div>
+        <p><code>AppConfigTest</code> checks that a minimal properties file falls back to the ₹20,000 threshold and the seven origin airports, with DEL first.</p>
+        <div class="callout"><span class="label">The testing idea</span><p>Test the decision, not the network. Whether ₹18,450 is a deal depends on conversion and threshold logic that runs offline, so those get unit tests. The <code>HttpClient</code> is passed in through the constructor, which leaves room to stub the API and cover the 401 and non-200 paths next.</p></div>
+      </section>
+
+      <section id="ci" class="reveal">
+        <h2><span class="n">06</span>CI and the daily run</h2>
+        <p>Two GitHub Actions workflows. CI builds and runs the test suite on every push and pull request to <code>main</code>, and uploads the Surefire reports even when a test fails. The scan workflow runs on a cron every morning, and can also be started by hand.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>.github/workflows/daily-flight-scan.yml</div>
+<pre><code><span class="k">on</span>:
+  <span class="k">schedule</span>:
+    - <span class="k">cron</span>: <span class="s">'0 3 * * *'</span>
+  <span class="k">workflow_dispatch</span>:
+<span class="c"># ...</span>
+      - <span class="k">name</span>: Run flight scan
+        <span class="k">env</span>:
+          <span class="k">AMADEUS_KEY</span>: ${{ secrets.AMADEUS_KEY }}
+          <span class="k">AMADEUS_SECRET</span>: ${{ secrets.AMADEUS_SECRET }}</code></pre></div>
+        <p>Credentials live only in repository secrets. The workflow writes them into the properties file at run time, so they're never committed.</p>
+        <div class="tags"><span>Java 17</span><span>java.net.http</span><span>Jackson</span><span>JUnit 5</span><span>Maven</span><span>Amadeus API</span><span>GitHub Actions cron</span></div>
+      </section>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <nav class="pager" aria-label="More projects">
+      <a href="/work/workq/"><span>← Previous project</span><b>workq</b></a>
+      <a href="/work/"><span>All work →</span><b>Projects</b></a>
+    </nav>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

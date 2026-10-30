@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shipping Slice UPI payments in one month — Jeevesh Verma</title>
+<meta name="description" content="How Jeevesh Verma led QA for Slice UPI payments under a one-month deadline and cut manual regression effort by 90%.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="Shipping Slice UPI payments in one month — Jeevesh Verma">
+<meta property="og:description" content="How Jeevesh Verma led QA for Slice UPI payments under a one-month deadline and cut manual regression effort by 90%.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://jeeveshverma.github.io/case-studies/slice-upi/">
+<link rel="canonical" href="https://jeeveshverma.github.io/case-studies/slice-upi/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<!-- DRAFT: written from résumé facts; Jeevesh to review -->
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/">Work</a>
+      <a href="/case-studies/" aria-current="page">Case studies</a>
+      <a href="/notes/">Notes</a>
+      <a href="/uses/">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+
+<main>
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/case-studies/">case studies</a><span aria-hidden="true">/</span><span>slice-upi</span></nav>
+      <span class="eyebrow">Case study 03 · Slice · 2022–2023</span>
+      <h1 style="margin-top:20px">UPI in <span class="grad">one month</span><span class="us">_</span></h1>
+      <p class="lede">Leading QA for a payments launch under a hard deadline, during a critical business transition.</p>
+      <div class="hero-actions">
+        <a class="pill solid" href="/resume/">Full résumé
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M6 4h6v6"/></svg></a>
+        <a class="pill" href="/#contact">Get in touch</a>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b>1 mo</b><span>Deadline</span></div>
+        <div class="metric"><b>−90%</b><span>Manual regression effort</span></div>
+        <div class="metric"><b>CI/CD</b><span>Automated suites integrated</span></div>
+        <div class="metric"><b>Load</b><span>Performance tests run</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#context">Context</a></li>
+        <li><a href="#problem">The problem</a></li>
+        <li><a href="#approach">What I did</a></li>
+        <li><a href="#results">Results</a></li>
+        <li><a href="#takeaways">What I'd take to the next team</a></li>
+      </ol>
+    </aside>
+
+    <article class="prose">
+      <section id="context" class="reveal">
+        <h2><span class="n">01</span>Context</h2>
+        <p>At Slice I was an SDET-I, from August 2022 to May 2023. I led QA delivery for <strong>Slice UPI payments</strong>, a business-critical launch with a <strong>one-month deadline</strong>, during a critical business transition.</p>
+      </section>
+
+      <section id="problem" class="reveal">
+        <h2><span class="n">02</span>The problem</h2>
+        <p>Payments leave little room for error, and a one-month deadline leaves little room for slow manual regression. The work had to cover backend validation, regression and release readiness at the same time, without the regression cycle becoming the bottleneck.</p>
+      </section>
+
+      <section id="approach" class="reveal">
+        <h2><span class="n">03</span>What I did</h2>
+        <ol>
+          <li><strong>Drove backend validation</strong> for the UPI launch.</li>
+          <li><strong>Integrated automated suites into CI/CD</strong>, so regression ran automatically instead of by hand.</li>
+          <li><strong>Identified and root-caused critical backend issues</strong>, including across the Rewards feature areas, improving defect detection before release.</li>
+          <li><strong>Ran performance and load tests</strong> for high-priority workflows, to surface scalability risks before production rollout.</li>
+          <li><strong>Owned release readiness</strong> for the launch.</li>
+        </ol>
+        <div class="callout"><span class="label">The idea</span><p>Under a hard deadline, automating regression is not a luxury that competes with shipping. It is what frees up the time to test the risky parts properly.</p></div>
+      </section>
+
+      <section id="results" class="reveal">
+        <h2><span class="n">04</span>Results</h2>
+        <div class="table"><table>
+          <thead><tr><th>Measure</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>UPI payments launch</td><td>QA delivered against a one-month deadline</td></tr>
+            <tr><td>Manual regression effort</td><td>Reduced by 90%</td></tr>
+            <tr><td>Defect detection</td><td>Critical backend issues found and root-caused before release</td></tr>
+            <tr><td>Scalability</td><td>Risks surfaced through load testing before rollout</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="takeaways" class="reveal">
+        <h2><span class="n">05</span>What I'd take to the next team</h2>
+        <ul>
+          <li>Automate the repetitive regression first; it buys time for the risky, exploratory work.</li>
+          <li>Find the root cause, not just the symptom. A root-caused bug is fixed once.</li>
+          <li>Load-test before launch, not after. Scale problems are cheapest to find before customers do.</li>
+        </ul>
+      </section>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <nav class="pager" aria-label="More case studies">
+      <a href="/case-studies/birdeye-api-automation/"><span>← Previous</span><b>Birdeye API automation</b></a>
+      <a href="/work/"><span>Next →</span><b>Projects</b></a>
+    </nav>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

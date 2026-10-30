@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>workq — Jeevesh Verma</title>
+<meta name="description" content="workq: a dependency-free background job queue for Go with worker pools, exponential backoff with jitter, delayed jobs, priorities, dead-lettering and graceful shutdown. ~90% coverage.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="workq — Jeevesh Verma">
+<meta property="og:description" content="A dependency-free background job queue in Go, built to test retries and failure modes.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://jeeveshverma.github.io/work/workq/">
+<link rel="canonical" href="https://jeeveshverma.github.io/work/workq/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/" aria-current="page">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/">Notes</a>
+      <a href="/uses/">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+<main>
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/work/">work</a><span aria-hidden="true">/</span><span>workq</span></nav>
+      <span class="eyebrow">Project 02 · Go</span>
+      <h1 style="margin-top:20px"><span class="us">~/</span>work<span class="grad">q</span><span class="us">_</span></h1>
+      <p class="lede">A dependency-free background job queue. Workers pull jobs, run them by kind, retry failures with exponential backoff and send the ones that never succeed to a dead-letter queue. I built it as a playground for the failure modes I spend my days testing.</p>
+      <div class="hero-actions">
+        <a class="pill solid" href="https://github.com/jeeveshverma/workq">View on GitHub
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M6 4h6v6"/></svg></a>
+        <a class="pill" href="https://pkg.go.dev/github.com/jeeveshverma/workq">Go reference</a>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b>~90%</b><span>Coverage, CI-gated at 85%</span></div>
+        <div class="metric"><b>0</b><span>Third-party deps</span></div>
+        <div class="metric"><b>12.4ns</b><span>Backoff delay, zero-alloc</span></div>
+        <div class="metric"><b>2</b><span>Fuzz targets run in CI</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#why">Why build it</a></li>
+        <li><a href="#flow">How a job moves</a></li>
+        <li><a href="#queue">A queue that sleeps precisely</a></li>
+        <li><a href="#backoff">Backoff with jitter</a></li>
+        <li><a href="#failure">Failure handling</a></li>
+        <li><a href="#testing">Test strategy</a></li>
+        <li><a href="#ci">CI gates</a></li>
+      </ol>
+    </aside>
+
+    <article class="prose">
+      <section id="why" class="reveal">
+        <h2><span class="n">01</span>Why build it</h2>
+        <p>The job model is simple on purpose. The interesting part is the concurrency: a <strong>delay-aware queue</strong> that blocks a worker exactly until the next job is due, correct wake-ups across many workers, and a <strong>graceful shutdown</strong> that lets in-flight jobs finish instead of killing them mid-run.</p>
+        <p>Retries, backoff and dead letters are where background systems quietly lose work. I wanted a codebase where each of those paths has a test that proves it.</p>
+      </section>
+
+      <section id="flow" class="reveal">
+        <h2><span class="n">02</span>How a job moves</h2>
+        <p>Producers push into a queue. Workers pop, run the handler through a middleware chain, and route the result.</p>
+        <div class="flow" aria-label="Job flow">
+          <span>Enqueue / EnqueueIn</span><em>→</em><span class="hi">MemQueue (min-heap)</span><em>→</em><span>worker N</span><em>→</em><span>middleware</span><em>→</em><span class="hi">handler + timeout + recover</span>
+        </div>
+        <ul>
+          <li><strong>Success:</strong> counted, and the <code>OnSuccess</code> hook fires.</li>
+          <li><strong>Error with attempts left:</strong> re-queued with <code>NotBefore = now + backoff(attempt)</code>.</li>
+          <li><strong>Error with attempts exhausted, a panic, or no handler:</strong> routed to the dead-letter queue with the last error kept.</li>
+        </ul>
+        <p>The pool depends only on a <code>Queue</code> interface. Scheduling lives in the queue, not the pool, so one mechanism handles both delayed jobs and backoff retries, and a Redis or broker-backed queue could drop in unchanged.</p>
+      </section>
+
+      <section id="queue" class="reveal">
+        <h2><span class="n">03</span>A queue that sleeps precisely</h2>
+        <p>Jobs sit in a min-heap ordered by due time, then priority. <code>Pop</code> either returns a due job or waits on a timer for the earliest one, waking early if a new push, a cancellation or a close arrives first.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>memqueue.go</div>
+<pre><code><span class="k">if</span> len(q.items) &gt; 0 {
+    <span class="k">if</span> d := q.items[0].NotBefore.Sub(q.now()); d &lt;= 0 {
+        job := heap.Pop(&amp;q.items).(Job)
+        <span class="c">// If the next job is also ready, wake a sibling worker so a
+        // single push/timer can drain a backlog across the pool.</span>
+        <span class="k">if</span> len(q.items) &gt; 0 &amp;&amp; !q.items[0].NotBefore.After(q.now()) {
+            q.signal()
+        }
+        q.mu.Unlock()
+        <span class="k">return</span> job, nil
+    } <span class="k">else</span> {
+        wait = d
+    }
+}
+<span class="c">// ...</span>
+<span class="k">select</span> {
+<span class="k">case</span> &lt;-ctx.Done():
+    stopTimer(timer)
+    <span class="k">return</span> Job{}, ctx.Err()
+<span class="k">case</span> &lt;-q.closedCh:
+    stopTimer(timer)
+    <span class="k">return</span> Job{}, ErrClosed
+<span class="k">case</span> &lt;-q.notify:
+    stopTimer(timer)
+<span class="k">case</span> &lt;-timerC:
+}</code></pre></div>
+        <p>Due time always beats priority, so a scheduled job never jumps the queue. Higher priority only wins among jobs that are due at the same time.</p>
+      </section>
+
+      <section id="backoff" class="reveal">
+        <h2><span class="n">04</span>Backoff with jitter</h2>
+        <p>The delay is <code>Base × Factor^(attempt-1)</code>, capped at <code>Max</code>, then perturbed by ±<code>Jitter</code>. The default is 100ms, doubling, capped at 30s, with 20% jitter. Jitter spreads out jobs that failed together so they don't all retry in lockstep.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>backoff.go</div>
+<pre><code>d := float64(b.Base) * math.Pow(b.Factor, float64(attempt-1))
+<span class="k">if</span> max := float64(b.Max); b.Max &gt; 0 &amp;&amp; d &gt; max {
+    d = max
+}
+<span class="k">if</span> b.Jitter &gt; 0 {
+    rnd := b.Rand
+    <span class="k">if</span> rnd == nil {
+        rnd = rand.Float64
+    }
+    <span class="c">// Perturb by ±Jitter: delta ∈ [-Jitter, +Jitter].</span>
+    delta := (rnd()*2 - 1) * b.Jitter
+    d *= 1 + delta
+}</code></pre></div>
+        <p><code>Rand</code> is a seam for tests: inject a function that returns a fixed value and the "random" delay becomes exact.</p>
+      </section>
+
+      <section id="failure" class="reveal">
+        <h2><span class="n">05</span>Failure handling</h2>
+        <p>Every handler runs with panic recovery and an optional per-job timeout. It runs on a background context, so <code>Shutdown</code> stops workers from pulling new jobs but lets the ones in flight finish, up to the caller's deadline.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>pool.go</div>
+<pre><code><span class="k">func</span> (p *Pool) <span class="f">runHandler</span>(h HandlerFunc, job Job) (err error) {
+    ctx := context.Background()
+    <span class="k">if</span> p.jobTimeout &gt; 0 {
+        <span class="k">var</span> cancel context.CancelFunc
+        ctx, cancel = context.WithTimeout(ctx, p.jobTimeout)
+        <span class="k">defer</span> cancel()
+    }
+    <span class="k">defer func</span>() {
+        <span class="k">if</span> r := recover(); r != nil {
+            err = fmt.Errorf(<span class="s">"handler panicked: %v"</span>, r)
+        }
+    }()
+    <span class="k">return</span> h(ctx, job)
+}</code></pre></div>
+        <p>If re-queueing a retry fails, the job goes to the dead-letter queue rather than vanishing. A bad handler can't take a worker down, and a lost job always leaves a trace.</p>
+      </section>
+
+      <section id="testing" class="reveal">
+        <h2><span class="n">06</span>Test strategy</h2>
+        <p>The whole suite runs under <code>-race</code>. It covers:</p>
+        <ol>
+          <li><strong>Queue semantics:</strong> FIFO, ordering by due time, priority ordering, due time beating priority.</li>
+          <li><strong>Blocking behaviour:</strong> <code>Pop</code> blocks until a push, returns on cancellation, and unblocks when the queue closes.</li>
+          <li><strong>Contention:</strong> a concurrent producers-and-consumers stress test.</li>
+          <li><strong>Pool lifecycle:</strong> retry then success, dead-letter after exhaustion, unknown kinds, panic recovery, graceful drain, middleware, stats and typed handlers.</li>
+          <li><strong>Fuzzing:</strong> backoff maths and the typed-payload decoder.</li>
+        </ol>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>fuzz_test.go</div>
+<pre><code>b := Backoff{
+    Base:   time.Duration(baseMs) * time.Millisecond,
+    Max:    time.Duration(maxMs) * time.Millisecond,
+    Factor: 2,
+    Jitter: jitter,
+    Rand:   <span class="k">func</span>() float64 { <span class="k">return</span> 1 }, <span class="c">// maximum positive jitter</span>
+}
+d := b.Delay(attempt)
+<span class="k">if</span> d &lt; 0 {
+    t.Fatalf(<span class="s">"negative delay %v for attempt=%d ..."</span>, d, attempt)
+}
+upper := time.Duration(float64(b.Max)*(1+jitter)) + time.Millisecond
+<span class="k">if</span> d &gt; upper {
+    t.Fatalf(<span class="s">"delay %v exceeds cap+jitter %v"</span>, d, upper)
+}</code></pre></div>
+        <div class="callout"><span class="label">The testing idea</span><p>Pin the random source to its worst case. With <code>Rand</code> forced to 1, jitter is at its maximum, so the fuzzer checks the bound that actually matters: the delay is never negative and never exceeds the cap plus jitter, whatever the attempt number.</p></div>
+        <div class="table"><table>
+          <thead><tr><th>Benchmark (Apple M-series)</th><th class="num">ns/op</th><th class="num">allocs/op</th></tr></thead>
+          <tbody>
+            <tr><td>BackoffDelay</td><td class="num">12.4</td><td class="num">0</td></tr>
+            <tr><td>MemQueuePushPop</td><td class="num">155</td><td class="num">2</td></tr>
+            <tr><td>MemQueuePushPopParallel</td><td class="num">549</td><td class="num">2</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="ci" class="reveal">
+        <h2><span class="n">07</span>CI gates</h2>
+        <p>Every push runs <code>gofmt</code>, <code>go vet</code>, the race-enabled suite, a coverage gate that fails below 85%, <code>golangci-lint</code>, a Docker build, and a 20-second fuzz smoke run for each fuzz target.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>.github/workflows/ci.yml</div>
+<pre><code><span class="k">fuzz</span>:
+  <span class="k">name</span>: Fuzz (smoke)
+  <span class="k">steps</span>:
+    <span class="c"># ...</span>
+    - <span class="k">name</span>: Fuzz backoff
+      <span class="k">run</span>: go test -run='^$' -fuzz=FuzzBackoffDelay -fuzztime=20s .
+    - <span class="k">name</span>: Fuzz typed decode
+      <span class="k">run</span>: go test -run='^$' -fuzz=FuzzTypedDecode -fuzztime=20s .</code></pre></div>
+        <div class="tags"><span>Go 1.23</span><span>generics</span><span>container/heap</span><span>log/slog</span><span>go test -fuzz</span><span>Docker distroless</span><span>GitHub Actions</span></div>
+      </section>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <nav class="pager" aria-label="More projects">
+      <a href="/work/linkforge/"><span>← Previous project</span><b>linkforge</b></a>
+      <a href="/work/europe-flight-deals/"><span>Next project →</span><b>europe-flight-deals</b></a>
+    </nav>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

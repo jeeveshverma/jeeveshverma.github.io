@@ -255,7 +255,7 @@
   .terminal .ok { color: var(--green); } .terminal .c { color: var(--muted); } .terminal .p { color: var(--cyan); }
   .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
   .tags span { font-family: var(--mono); font-size: 11px; padding: 5px 11px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--soft); }
-  .panel-link { margin-top: auto; padding-top: 28px; }
+  .panel-link { margin-top: auto; padding-top: 28px; display: flex; gap: 10px; flex-wrap: wrap; }
 
   /* ---------- toolchain ---------- */
   .caps { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
@@ -368,11 +368,11 @@
   <div class="wrap nav-inner">
     <a class="logo" href="#top" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
     <nav class="nav-links" id="nav-links" aria-label="Primary">
-      <a href="#process">Process</a>
       <a href="#about">About</a>
       <a href="#experience">Experience</a>
-      <a href="#projects">Projects</a>
-      <a href="#toolchain">Toolchain</a>
+      <a href="/work/">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/">Notes</a>
     </nav>
     <div class="nav-right">
       <a class="pill solid" href="#contact">Get in touch</a>
@@ -611,8 +611,8 @@
   <div class="wrap">
     <div class="foot-grid">
       <div><a class="logo" href="#top">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
-      <div><h4>Site</h4><ul><li><a href="#process">Process</a></li><li><a href="#experience">Experience</a></li><li><a href="#projects">Projects</a></li><li><a href="#toolchain">Toolchain</a></li></ul></div>
-      <div><h4>Work</h4><ul><li><a href="https://jeeveshverma.github.io/resume/">Résumé</a></li><li><a href="https://github.com/jeeveshverma/linkforge">linkforge</a></li><li><a href="https://github.com/jeeveshverma/workq">workq</a></li></ul></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
       <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
     </div>
     <div class="wordmark" aria-hidden="true">JEEVESH<span>_</span></div>
@@ -718,15 +718,15 @@
 
   /* ---- projects: filterable list + detail panel ---- */
   const projects = [
-    { id: 'linkforge', lang: 'Go', tags: ['go'], url: 'https://github.com/jeeveshverma/linkforge',
+    { id: 'linkforge', lang: 'Go', tags: ['go'], page: '/work/linkforge/', url: 'https://github.com/jeeveshverma/linkforge',
       desc: 'Production-shaped URL shortener with click analytics. Layered architecture, token-bucket rate limiting, Prometheus metrics, atomic JSON persistence, zero third-party dependencies.',
       term: '<span class="p">$</span> go test -race ./...\n<span class="ok">ok</span>  linkforge/...  <span class="c">coverage: ~89% of statements</span>\n<span class="c"># CI-gated · fuzz + race tested · distroless ~10MB image</span>',
       chips: ['REST API', 'rate limiting', 'Prometheus', 'graceful shutdown', 'fuzz tests'] },
-    { id: 'workq', lang: 'Go', tags: ['go'], url: 'https://github.com/jeeveshverma/workq',
+    { id: 'workq', lang: 'Go', tags: ['go'], page: '/work/workq/', url: 'https://github.com/jeeveshverma/workq',
       desc: 'Dependency-free background job queue: worker pools, exponential backoff with jitter, delayed scheduling, priorities, dead-letter routing and graceful shutdown. Typed handlers via generics.',
       term: '<span class="p">$</span> go test -cover ./...\n<span class="ok">ok</span>  workq  <span class="c">coverage: ~90% of statements</span>\n<span class="c"># panic recovery · middleware composition · table-driven tests</span>',
       chips: ['worker pool', 'backoff + jitter', 'dead-letter queue', 'generics'] },
-    { id: 'europe-flight-deals', lang: 'Java', tags: ['java'], url: 'https://github.com/jeeveshverma/europe-flight-deals-india',
+    { id: 'europe-flight-deals', lang: 'Java', tags: ['java'], page: '/work/europe-flight-deals/', url: 'https://github.com/jeeveshverma/europe-flight-deals-india',
       desc: 'Automation that scans India → Europe round-trip fares via the Amadeus API and surfaces anything under ₹20,000. 7 Indian airports, 22+ destinations, scheduled with GitHub Actions.',
       term: '<span class="p">$</span> mvn test\n<span class="ok">BUILD SUCCESS</span>  <span class="c">unit tested</span>\n<span class="c"># daily cron · rate-limit compliant · Amadeus API</span>',
       chips: ['Maven', 'GitHub Actions', 'Amadeus API', 'daily cron'] },
@@ -751,7 +751,7 @@
       <p class="desc">${p.desc}</p>
       <div class="terminal"><div class="bar"><i></i><i></i><i></i></div><pre>${p.term}</pre></div>
       <div class="tags">${p.chips.map(c => `<span>${c.replace('&', '&amp;')}</span>`).join('')}</div>
-      <div class="panel-link"><a class="pill" href="${p.url}">${p.tags.includes('live') ? 'Open site' : 'View on GitHub'}
+      <div class="panel-link">${p.page ? `<a class="pill solid" href="${p.page}">Read the build</a> ` : ''}<a class="pill" href="${p.url}">${p.tags.includes('live') ? 'Open site' : 'View on GitHub'}
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M6 4h6v6"/></svg></a></div>`;
   }
   list.addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(+b.dataset.i); });

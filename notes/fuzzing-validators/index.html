@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fuzzing validators in Go — Jeevesh Verma</title>
+<meta name="description" content="Property-based fuzzing of input validators with Go's native fuzzer: seeds, the 'rejection is always acceptable' property, and a 20-second fuzz smoke run in CI. Real examples from linkforge and workq.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="Fuzzing validators in Go — Jeevesh Verma">
+<meta property="og:description" content="Don't assert outputs, assert properties: if the validator accepts it, it must be safe.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://jeeveshverma.github.io/notes/fuzzing-validators/">
+<link rel="canonical" href="https://jeeveshverma.github.io/notes/fuzzing-validators/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  .post-meta { margin-top: 28px; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+  .post-meta span + span::before { content: "·"; margin-right: 12px; color: var(--faint); }
+</style>
+</head>
+<body>
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/" aria-current="page">Notes</a>
+      <a href="/uses/">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+<main>
+<!-- DRAFT: Jeevesh to review -->
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/notes/">notes</a><span aria-hidden="true">/</span><span>fuzzing-validators</span></nav>
+      <span class="eyebrow">Note · Go testing</span>
+      <h1 style="margin-top:20px">Fuzzing<br><span class="grad">validators</span><span class="us">_</span></h1>
+      <p class="lede">A validator is a promise about what gets past it. Example-based tests check the inputs I thought of. A fuzzer checks the promise against inputs I didn't, and Go has one built into <code>go test</code>.</p>
+      <p class="post-meta"><span>30 Oct 2026</span><span>6 min read</span></p>
+    </div>
+  </section>
+
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#properties">Assert properties, not outputs</a></li>
+        <li><a href="#url">Fuzzing a URL normaliser</a></li>
+        <li><a href="#seeds">Choosing seeds</a></li>
+        <li><a href="#beyond">Beyond validators</a></li>
+        <li><a href="#ci">A fuzz smoke run in CI</a></li>
+        <li><a href="#takeaways">Takeaways</a></li>
+      </ol>
+    </aside>
+
+    <article class="prose">
+      <section id="properties" class="reveal">
+        <h2><span class="n">01</span>Assert properties, not outputs</h2>
+        <p>A normal test says: for <em>this</em> input, expect <em>that</em> output. A fuzzer generates thousands of inputs per second, so you can't write the expected output for each one. You write a <strong>property</strong> instead: something that must hold for every input.</p>
+        <p>For a validator, the property almost writes itself:</p>
+        <blockquote>Rejection is always acceptable. Acceptance has to be earned.</blockquote>
+        <p>If the validator says no, the test returns early; being too strict is a product question, not a safety one. If it says yes, the test independently checks that the accepted value really is safe. A validator that lets through one bad input in a million fails here, and a fuzzer is very good at finding the one in a million.</p>
+        <p>The two properties for <a href="/work/linkforge/">linkforge</a>'s vanity-code validator are "within length bounds" and "only allowed characters":</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/shortener/fuzz_test.go</div>
+<pre><code><span class="c">// FuzzValidateCustomCode asserts validateCustomCode never panics and only
+// accepts codes within the length bounds using the allowed charset.</span>
+<span class="k">func</span> <span class="f">FuzzValidateCustomCode</span>(f *testing.F) {
+    <span class="k">for</span> _, s := <span class="k">range</span> []string{<span class="s">""</span>, <span class="s">"ab"</span>, <span class="s">"abc"</span>, <span class="s">"my-vanity_1"</span>, <span class="s">"WithCAPS"</span>, strings.Repeat(<span class="s">"a"</span>, 33), <span class="s">"bad char"</span>, <span class="s">"emoji😀"</span>} {
+        f.Add(s)
+    }
+    f.Fuzz(<span class="k">func</span>(t *testing.T, code string) {
+        <span class="k">if</span> err := validateCustomCode(code); err != nil {
+            <span class="k">return</span>
+        }
+        <span class="k">if</span> len(code) &lt; minCodeLength || len(code) &gt; maxCodeLength {
+            t.Fatalf(<span class="s">"accepted code %q outside length bounds"</span>, code)
+        }
+        <span class="k">for</span> _, r := <span class="k">range</span> code {
+            ok := strings.ContainsRune(alphabet, r) || r == <span class="s">'-'</span> || r == <span class="s">'_'</span>
+            <span class="k">if</span> !ok {
+                t.Fatalf(<span class="s">"accepted code %q with disallowed rune %q"</span>, code, r)
+            }
+        }
+    })
+}</code></pre></div>
+        <div class="callout"><span class="label">Check it a different way</span><p>The property check should not call the validator's own helpers. Here it re-checks the charset rune by rune against the alphabet. If it reused the validator's logic, a bug in that logic would pass its own test.</p></div>
+      </section>
+
+      <section id="url" class="reveal">
+        <h2><span class="n">02</span>Fuzzing a URL normaliser</h2>
+        <p>URLs are where validators go to die. Schemes in odd cases, userinfo, missing hosts, scheme-relative links, <code>javascript:</code>, non-ASCII hosts. linkforge's <code>normalizeURL</code> promises that anything it accepts is a parseable absolute http(s) URL with a host, under the length limit. The fuzz target spells that promise out, one property per check:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/shortener/fuzz_test.go</div>
+<pre><code>f.Fuzz(<span class="k">func</span>(t *testing.T, raw string) {
+    got, err := normalizeURL(raw)
+    <span class="k">if</span> err != nil {
+        <span class="k">return</span> <span class="c">// rejection is always acceptable</span>
+    }
+    u, perr := url.Parse(got)
+    <span class="k">if</span> perr != nil {
+        t.Fatalf(<span class="s">"accepted %q -&gt; unparseable %q: %v"</span>, raw, got, perr)
+    }
+    <span class="k">if</span> scheme := strings.ToLower(u.Scheme); scheme != <span class="s">"http"</span> &amp;&amp; scheme != <span class="s">"https"</span> {
+        t.Fatalf(<span class="s">"accepted non-http(s) scheme %q from input %q"</span>, u.Scheme, raw)
+    }
+    <span class="k">if</span> u.Host == <span class="s">""</span> {
+        t.Fatalf(<span class="s">"accepted hostless URL %q from input %q"</span>, got, raw)
+    }
+    <span class="k">if</span> len(got) &gt; maxURLLength {
+        t.Fatalf(<span class="s">"accepted over-length URL (%d) from input %q"</span>, len(got), raw)
+    }
+})</code></pre></div>
+        <p>Notice what's checked: the <strong>output</strong>, <code>got</code>, not the input. A normaliser transforms what it's given, so the promise is about what comes out. Parsing <code>got</code> again also catches a quieter bug class: output that doesn't survive a round trip.</p>
+        <p>And there's an implicit property in every fuzz target: <strong>it must not panic</strong>. Any panic inside <code>f.Fuzz</code> is a failure, so even a target with no assertions at all is worth having.</p>
+      </section>
+
+      <section id="seeds" class="reveal">
+        <h2><span class="n">03</span>Choosing seeds</h2>
+        <p>Seeds added with <code>f.Add</code> are the starting corpus. The fuzzer mutates them, so good seeds put it near the interesting boundaries from the start. Here are the URL seeds:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/shortener/fuzz_test.go</div>
+<pre><code>seeds := []string{
+    <span class="s">"https://example.com"</span>,
+    <span class="s">"http://a.b/c?d=1#frag"</span>,
+    <span class="s">"HTTPS://EXAMPLE.COM/Path"</span>,
+    <span class="s">"https://user:pass@host:8080/p"</span>,
+    <span class="s">""</span>,
+    <span class="s">"   "</span>,
+    <span class="s">"not a url"</span>,
+    <span class="s">"ftp://example.com"</span>,
+    <span class="s">"javascript:alert(1)"</span>,
+    <span class="s">"http://"</span>,
+    <span class="s">"//no-scheme"</span>,
+    <span class="s">"https://例え.テスト/страница"</span>,
+}</code></pre></div>
+        <p>I pick them the way I'd pick manual test cases, by category:</p>
+        <ul>
+          <li><strong>Valid, in several shapes:</strong> query and fragment, upper-case scheme, userinfo and port.</li>
+          <li><strong>Empty and whitespace:</strong> the cheapest bugs to have and to catch.</li>
+          <li><strong>Wrong scheme:</strong> <code>ftp</code>, and <code>javascript:</code> because that one matters for security.</li>
+          <li><strong>Almost valid:</strong> a scheme with no host, a host with no scheme.</li>
+          <li><strong>Non-ASCII:</strong> so the mutator starts with multi-byte runes instead of having to discover them.</li>
+        </ul>
+        <p>Seeds also run as ordinary test cases in every plain <code>go test</code>, without <code>-fuzz</code>. If the fuzzer ever finds a failure, Go writes the input to <code>testdata/fuzz/</code>, and from then on it's a permanent regression test.</p>
+      </section>
+
+      <section id="beyond" class="reveal">
+        <h2><span class="n">04</span>Beyond validators</h2>
+        <p>Anything with a promise about its output range can be fuzzed. In <a href="/work/workq/">workq</a>, the retry backoff promises its delay is never negative and never exceeds the cap plus jitter, for any attempt number:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>workq/fuzz_test.go</div>
+<pre><code>f.Fuzz(<span class="k">func</span>(t *testing.T, attempt int, baseMs, maxMs int64, jitterPct int) {
+    <span class="c">// Keep inputs in a sane, checkable range.</span>
+    <span class="k">if</span> baseMs &lt; 0 || maxMs &lt;= 0 || baseMs &gt; 1_000_000 || maxMs &gt; 1_000_000_000 {
+        <span class="k">return</span>
+    }
+    jitter := float64(((jitterPct%101)+101)%101) / 100 <span class="c">// 0..1</span>
+
+    b := Backoff{
+        Base:   time.Duration(baseMs) * time.Millisecond,
+        Max:    time.Duration(maxMs) * time.Millisecond,
+        Factor: 2,
+        Jitter: jitter,
+        Rand:   <span class="k">func</span>() float64 { <span class="k">return</span> 1 }, <span class="c">// maximum positive jitter</span>
+    }
+    d := b.Delay(attempt)
+    <span class="k">if</span> d &lt; 0 {
+        t.Fatalf(<span class="s">"negative delay %v for attempt=%d base=%dms max=%dms jitter=%.2f"</span>, d, attempt, baseMs, maxMs, jitter)
+    }
+    upper := time.Duration(float64(b.Max)*(1+jitter)) + time.Millisecond
+    <span class="k">if</span> d &gt; upper {
+        t.Fatalf(<span class="s">"delay %v exceeds cap+jitter %v"</span>, d, upper)
+    }
+})</code></pre></div>
+        <p>Two techniques worth stealing: <strong>fold raw inputs into a valid range</strong> (<code>jitterPct</code> becomes 0–100% whatever the fuzzer sends) instead of rejecting most of them, and <strong>pin randomness to the worst case</strong> (<code>Rand</code> returns 1) so the bound is tested at its edge.</p>
+        <p>The simplest target in the repo has no assertion at all. It feeds arbitrary bytes to the typed JSON handler and relies on the implicit property: malformed payloads must come back as errors, not crashes.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>workq/fuzz_test.go</div>
+<pre><code>f.Fuzz(<span class="k">func</span>(t *testing.T, data []byte) {
+    <span class="c">// Must not panic; an error return is acceptable.</span>
+    _ = h(context.Background(), Job{Kind: <span class="s">"x"</span>, Payload: data})
+})</code></pre></div>
+      </section>
+
+      <section id="ci" class="reveal">
+        <h2><span class="n">05</span>A fuzz smoke run in CI</h2>
+        <p>Fuzzing is open-ended; left alone, it runs until it finds something. In CI I give each target a fixed budget. Twenty seconds won't find deep bugs, but it does catch a change that breaks a property in an obvious way, on every push:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/.github/workflows/ci.yml</div>
+<pre><code><span class="k">fuzz</span>:
+  <span class="k">name</span>: Fuzz (smoke)
+  <span class="k">runs-on</span>: ubuntu-latest
+  <span class="k">steps</span>:
+    - <span class="k">uses</span>: actions/checkout@v4
+    - <span class="k">uses</span>: actions/setup-go@v5
+      <span class="k">with</span>:
+        <span class="k">go-version</span>: <span class="s">"1.23"</span>
+        <span class="k">cache</span>: false
+    - <span class="k">name</span>: Fuzz URL normalizer
+      <span class="k">run</span>: go test -run='^$' -fuzz=FuzzNormalizeURL -fuzztime=20s ./internal/shortener/
+    - <span class="k">name</span>: Fuzz custom-code validator
+      <span class="k">run</span>: go test -run='^$' -fuzz=FuzzValidateCustomCode -fuzztime=20s ./internal/shortener/</code></pre></div>
+        <ul>
+          <li><code>-run='^$'</code> skips the regular tests, which already ran in the test job.</li>
+          <li><code>-fuzz</code> accepts only one target per invocation, hence one step per target.</li>
+          <li>It's a separate job, so a fuzz failure shows up as its own red check rather than burying itself in the unit-test output.</li>
+        </ul>
+        <p>For a longer hunt, run the same command locally with a bigger <code>-fuzztime</code> and leave it going.</p>
+      </section>
+
+      <section id="takeaways" class="reveal">
+        <h2><span class="n">06</span>Takeaways</h2>
+        <ol>
+          <li><strong>Write the promise, not the answer.</strong> For a validator: if it accepts, the value must be safe. Rejecting is always fine.</li>
+          <li><strong>Check acceptance independently</strong> of the validator's own code, and check the transformed output, not the raw input.</li>
+          <li><strong>Seed by category:</strong> valid shapes, empty, wrong scheme, almost valid, non-ASCII.</li>
+          <li><strong>"Must not panic" is a property too.</strong> A fuzz target with no assertions still earns its place on any parser.</li>
+          <li><strong>Give CI a fixed fuzz budget</strong> as its own job, and let crashers in <code>testdata/fuzz/</code> become permanent regression tests.</li>
+        </ol>
+      </section>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <nav class="pager" aria-label="More notes">
+      <a href="/notes/testing-without-sleeping/"><span>← Previous note</span><b>Testing time without sleeping</b></a>
+      <a href="/notes/"><span>All notes →</span><b>Notes</b></a>
+    </nav>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

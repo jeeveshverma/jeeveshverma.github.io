@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testing time without sleeping — Jeevesh Verma</title>
+<meta name="description" content="How to test expiry, reapers, token-bucket refill and retry backoff in Go without time.Sleep, by injecting a clock. Real examples from linkforge and workq.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="Testing time without sleeping — Jeevesh Verma">
+<meta property="og:description" content="Inject the clock, move it by hand, and time-based tests run instantly and identically every time.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://jeeveshverma.github.io/notes/testing-without-sleeping/">
+<link rel="canonical" href="https://jeeveshverma.github.io/notes/testing-without-sleeping/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Ctext x='14' y='68' font-family='Arial' font-weight='900' font-size='50' fill='%23fff'%3EJV%3C/text%3E%3Crect x='72' y='62' width='16' height='7' fill='%234fc6f5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  .post-meta { margin-top: 28px; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+  .post-meta span + span::before { content: "·"; margin-right: 12px; color: var(--faint); }
+</style>
+</head>
+<body>
+
+<!-- ===== shared header: copy verbatim, set aria-current on the active section ===== -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/" aria-label="Jeevesh Verma, home">JV<span>_</span></a>
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="/work/">Work</a>
+      <a href="/case-studies/">Case studies</a>
+      <a href="/notes/" aria-current="page">Notes</a>
+      <a href="/uses/">Uses</a>
+      <a href="/now/">Now</a>
+    </nav>
+    <div class="nav-right">
+      <a class="pill solid" href="/#contact">Get in touch</a>
+      <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<!-- ===== /shared header ===== -->
+
+<main>
+<!-- DRAFT: Jeevesh to review -->
+  <section class="page-hero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/notes/">notes</a><span aria-hidden="true">/</span><span>testing-without-sleeping</span></nav>
+      <span class="eyebrow">Note · Go testing</span>
+      <h1 style="margin-top:20px">Testing time<br><span class="grad">without sleeping</span><span class="us">_</span></h1>
+      <p class="lede">Expiry, background reapers, rate-limit refill, retry backoff: all of it depends on the clock. If your tests depend on the real clock, they're slow and they flake. Here's how I take the clock away from the code and hand it to the test.</p>
+      <p class="post-meta"><span>30 Oct 2026</span><span>7 min read</span></p>
+    </div>
+  </section>
+
+  <div class="wrap article">
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#problem">The problem with Sleep</a></li>
+        <li><a href="#seam">Make time a field</a></li>
+        <li><a href="#expiry">Expiry in one line</a></li>
+        <li><a href="#params">Pass "now" in</a></li>
+        <li><a href="#random">Randomness is time's cousin</a></li>
+        <li><a href="#exceptions">Where I still wait</a></li>
+        <li><a href="#takeaways">Takeaways</a></li>
+      </ol>
+    </aside>
+
+    <article class="prose">
+      <section id="problem" class="reveal">
+        <h2><span class="n">01</span>The problem with Sleep</h2>
+        <p>The obvious way to test "a link expires after an hour" is to create a link with a short TTL, <code>time.Sleep</code> past it, and check it's gone. It works on your laptop. Then it meets a busy CI runner.</p>
+        <ul>
+          <li><strong>It's slow.</strong> Every sleep is dead time, multiplied by every test that does it.</li>
+          <li><strong>It's flaky.</strong> Sleep long enough to be safe and the suite crawls; sleep short and a loaded machine misses the window.</li>
+          <li><strong>It can't reach the interesting cases.</strong> "One token refills after exactly 100ms" or "the delay caps at attempt 4" are hard to hit with a wall clock.</li>
+        </ul>
+        <p>The fix in both of my Go side projects, <a href="/work/linkforge/">linkforge</a> and <a href="/work/workq/">workq</a>, is the same: the code never calls <code>time.Now()</code> directly.</p>
+      </section>
+
+      <section id="seam" class="reveal">
+        <h2><span class="n">02</span>Make time a field</h2>
+        <p>linkforge's rate limiter keeps a token bucket per client. The only change needed to make it testable is that "now" is a function stored on the struct, defaulting to the real clock:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/ratelimit/limiter.go</div>
+<pre><code><span class="k">type</span> Limiter <span class="k">struct</span> {
+    rps   float64
+    burst float64
+
+    mu      sync.Mutex
+    buckets <span class="k">map</span>[string]*bucket
+    now     <span class="k">func</span>() time.Time
+}
+
+<span class="k">func</span> <span class="f">NewLimiter</span>(rps float64, burst int) *Limiter {
+    <span class="k">return</span> &amp;Limiter{
+        rps:     rps,
+        burst:   float64(burst),
+        buckets: make(<span class="k">map</span>[string]*bucket),
+        now:     time.Now,
+    }
+}</code></pre></div>
+        <p>Production gets <code>time.Now</code>. The test, which lives in the same package, swaps in a closure over a local variable, and then moves time by assigning to that variable:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/ratelimit/limiter_test.go</div>
+<pre><code><span class="k">func</span> <span class="f">TestLimiterRefillsOverTime</span>(t *testing.T) {
+    l := NewLimiter(10, 5) <span class="c">// 10 tokens/sec =&gt; 1 token per 100ms</span>
+    now := time.Unix(0, 0)
+    l.now = <span class="k">func</span>() time.Time { <span class="k">return</span> now }
+
+    <span class="k">for</span> i := 0; i &lt; 5; i++ {
+        l.Allow(<span class="s">"client"</span>)
+    }
+    <span class="k">if</span> l.Allow(<span class="s">"client"</span>) {
+        t.Fatal(<span class="s">"request allowed before refill, want denied"</span>)
+    }
+
+    now = now.Add(100 * time.Millisecond) <span class="c">// one token refilled</span>
+    <span class="k">if</span> !l.Allow(<span class="s">"client"</span>) {
+        t.Error(<span class="s">"request denied after refill, want allowed"</span>)
+    }
+    <span class="k">if</span> l.Allow(<span class="s">"client"</span>) {
+        t.Error(<span class="s">"second request allowed, only one token should have refilled"</span>)
+    }
+}</code></pre></div>
+        <p>That test checks an exact boundary (one token, not zero, not two) and finishes in microseconds. No interface, no mocking library: a <code>func() time.Time</code> is the smallest seam that works.</p>
+        <div class="callout"><span class="label">Why not a global?</span><p>A package-level <code>var now = time.Now</code> also works, but tests that swap it can't run in parallel and leak into each other. A field keeps each test's clock private to the instance it built.</p></div>
+      </section>
+
+      <section id="expiry" class="reveal">
+        <h2><span class="n">03</span>Expiry in one line</h2>
+        <p>The same trick turns a TTL test into straight-line code. The shortener service and the store both take a clock, the test points them at the same variable, and "two hours later" is an assignment:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/shortener/service_test.go</div>
+<pre><code>base := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+clock := base
+svc.now = <span class="k">func</span>() time.Time { <span class="k">return</span> clock }
+store.SetClock(<span class="k">func</span>() time.Time { <span class="k">return</span> clock })
+
+link, _, err := svc.Shorten(context.Background(), ShortenRequest{URL: <span class="s">"https://example.com"</span>, TTL: time.Hour})
+<span class="c">// ...</span>
+<span class="k">if</span> want := base.Add(time.Hour); !link.ExpiresAt.Equal(want) {
+    t.Errorf(<span class="s">"ExpiresAt = %v, want %v"</span>, link.ExpiresAt, want)
+}
+<span class="k">if</span> _, err := svc.Resolve(context.Background(), <span class="s">"ttl0001"</span>); err != nil {
+    t.Fatalf(<span class="s">"Resolve() before expiry error = %v"</span>, err)
+}
+clock = base.Add(2 * time.Hour)
+<span class="k">if</span> _, err := svc.Resolve(context.Background(), <span class="s">"ttl0001"</span>); !errors.Is(err, storage.ErrNotFound) {
+    t.Fatalf(<span class="s">"Resolve() after expiry error = %v, want ErrNotFound"</span>, err)
+}</code></pre></div>
+        <p>A fixed <code>time.Date</code> also makes the expected values exact. <code>ExpiresAt</code> is checked with <code>Equal</code> against a known instant instead of "roughly an hour from whenever the test ran".</p>
+      </section>
+
+      <section id="params" class="reveal">
+        <h2><span class="n">04</span>Pass "now" in</h2>
+        <p>Sometimes there's an even simpler seam: make the time an argument. linkforge's store doesn't decide when "now" is during a sweep; the caller tells it.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/storage/storage.go</div>
+<pre><code><span class="c">// DeleteExpired removes links that have expired as of now and returns the
+// number removed.</span>
+DeleteExpired(now time.Time) int</code></pre></div>
+        <p>So the sweep logic is tested with plain values, no clock swapping at all:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>linkforge/internal/storage/memory_test.go</div>
+<pre><code>base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+<span class="c">// "keep" has no expiry; "drop" expires at base</span>
+<span class="k">if</span> n := s.DeleteExpired(base.Add(time.Second)); n != 1 {
+    t.Errorf(<span class="s">"DeleteExpired() = %d, want 1"</span>, n)
+}</code></pre></div>
+        <p>The rate limiter's idle-bucket cleanup does the same thing: <code>l.sweep(base.Add(time.Minute), 30*time.Second)</code> asks "as of minute one, reclaim anything idle for more than 30 seconds" and expects exactly one bucket back.</p>
+        <p>The background reaper that calls <code>DeleteExpired</code> on a ticker is then a thin loop. Its tests only need to prove the wiring: it sweeps, and it stops when the context is cancelled.</p>
+      </section>
+
+      <section id="random" class="reveal">
+        <h2><span class="n">05</span>Randomness is time's cousin</h2>
+        <p>Retry backoff has the same problem from a different direction. workq's backoff adds jitter so a batch of jobs that failed together don't all retry in lockstep. Jitter means randomness, and randomness in a test means assertions like "somewhere between 80 and 120ms".</p>
+        <p>So the random source is a seam too:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>workq/backoff.go</div>
+<pre><code><span class="c">// Rand returns a value in [0,1). It is a seam for deterministic tests; nil
+// uses the default source.</span>
+Rand <span class="k">func</span>() float64</code></pre></div>
+        <p>Pinning it to the extremes turns a fuzzy range into two exact assertions:</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>workq/backoff_test.go</div>
+<pre><code><span class="c">// A fixed Rand of 1.0 yields the maximum positive perturbation (+Jitter);
+// 0.0 yields the maximum negative (-Jitter).</span>
+base := 100 * time.Millisecond
+
+high := Backoff{Base: base, Max: time.Second, Factor: 1, Jitter: 0.2, Rand: <span class="k">func</span>() float64 { <span class="k">return</span> 1 }}
+<span class="k">if</span> got, want := high.Delay(1), 120*time.Millisecond; got != want {
+    t.Errorf(<span class="s">"Delay with rand=1 = %v, want %v"</span>, got, want)
+}
+
+low := Backoff{Base: base, Max: time.Second, Factor: 1, Jitter: 0.2, Rand: <span class="k">func</span>() float64 { <span class="k">return</span> 0 }}
+<span class="k">if</span> got, want := low.Delay(1), 80*time.Millisecond; got != want {
+    t.Errorf(<span class="s">"Delay with rand=0 = %v, want %v"</span>, got, want)
+}</code></pre></div>
+        <p>And because <code>Delay</code> just returns a duration instead of sleeping for it, the exponential curve and the cap are a table test with no waiting at all: attempts 1–5 give 100, 200, 400, 400, 400ms.</p>
+      </section>
+
+      <section id="exceptions" class="reveal">
+        <h2><span class="n">06</span>Where I still wait</h2>
+        <p>I want to be honest about the edges. A few workq tests still use a short <code>time.Sleep</code>, and they have something in common: they test a <strong>goroutine handoff</strong>, not a duration.</p>
+        <div class="code"><div class="bar"><i></i><i></i><i></i>workq/memqueue_test.go</div>
+<pre><code>go <span class="k">func</span>() {
+    _, err := q.Pop(ctx)
+    errc &lt;- err
+}()
+time.Sleep(10 * time.Millisecond) <span class="c">// let the goroutine block in Pop</span>
+
+<span class="k">if</span> err := q.Close(); err != nil {
+    t.Fatalf(<span class="s">"Close error = %v"</span>, err)
+}</code></pre></div>
+        <p>There's no clean way to observe "this goroutine is now parked inside <code>Pop</code>" from outside. The sleep makes the interesting interleaving likely, and the test still passes if it doesn't happen (Close-then-Pop also returns <code>ErrClosed</code>). What matters is that the <em>assertion</em> never depends on timing: it waits on a channel with a generous <code>time.After(time.Second)</code> as a failure deadline, not as the expected path.</p>
+        <p>The other trick for queues is to make "the future" far enough away that nothing can reach it. To test that a ready low-priority job beats a high-priority one that isn't due yet, workq schedules the high-priority job an hour out. Nothing waits for that hour; it just guarantees the ordering.</p>
+      </section>
+
+      <section id="takeaways" class="reveal">
+        <h2><span class="n">07</span>Takeaways</h2>
+        <ol>
+          <li><strong>Never call <code>time.Now()</code> deep in logic.</strong> Store a <code>now func() time.Time</code> on the struct, defaulting to <code>time.Now</code>.</li>
+          <li><strong>Prefer passing time in</strong> (<code>DeleteExpired(now)</code>) when the caller already knows it. No clock to swap at all.</li>
+          <li><strong>Return durations, don't sleep them.</strong> A backoff that returns a delay is a pure function you can table-test.</li>
+          <li><strong>Treat randomness like time:</strong> inject it, and pin it to the extremes in tests.</li>
+          <li><strong>When you must wait, wait on a signal.</strong> Use channels for the happy path and <code>time.After</code> only as a failure deadline.</li>
+        </ol>
+        <blockquote>A test that sleeps is asking the machine for a favour. A test with an injected clock is giving it an instruction.</blockquote>
+      </section>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <nav class="pager" aria-label="More notes">
+      <a href="/notes/"><span>← All notes</span><b>Notes</b></a>
+      <a href="/notes/fuzzing-validators/"><span>Next note →</span><b>Fuzzing validators</b></a>
+    </nav>
+  </div>
+</main>
+
+<!-- ===== shared footer: copy verbatim ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><a class="logo" href="/">JV<span>_</span></a><p class="blurb">Jeevesh Verma. SDET for backends, APIs and the pipelines between them. Currently at Auxia.</p></div>
+      <div><h4>Site</h4><ul><li><a href="/work/">Work</a></li><li><a href="/case-studies/">Case studies</a></li><li><a href="/notes/">Notes</a></li><li><a href="/uses/">Uses</a></li><li><a href="/now/">Now</a></li></ul></div>
+      <div><h4>Projects</h4><ul><li><a href="/work/linkforge/">linkforge</a></li><li><a href="/work/workq/">workq</a></li><li><a href="/work/europe-flight-deals/">europe-flight-deals</a></li><li><a href="/resume/">Résumé</a></li></ul></div>
+      <div><h4>Elsewhere</h4><ul><li><a href="https://github.com/jeeveshverma">GitHub</a></li><li><a href="https://linkedin.com/in/jeeveshverma">LinkedIn</a></li><li><a href="mailto:jeeveshverma2@gmail.com">Email</a></li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Jeevesh Verma</span><span>built by hand, tested by habit · exit code 0</span></div>
+  </div>
+</footer>
+<!-- ===== /shared footer ===== -->
+
+<script src="/assets/site.js"></script>
+</body>
+</html>
