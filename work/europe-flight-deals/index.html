@@ -134,18 +134,16 @@ allDeals.sort(Comparator.comparingDouble(FlightDeal::priceInr));</code></pre></d
 
       <section id="currency" class="reveal">
         <h2><span class="n">04</span>Prices in rupees</h2>
-        <p>The search asks Amadeus for <code>currencyCode=INR</code> directly. If an offer still comes back in another currency, <code>CurrencyConverter</code> converts it, caching one rate per currency in a <code>ConcurrentHashMap</code>.</p>
+        <p>The search asks Amadeus for <code>currencyCode=INR</code> directly, so conversion is only a safety net. If an offer still comes back in another currency, <code>CurrencyConverter</code> applies a fixed, approximate rate and logs a warning, because a fare close to the threshold might then be misjudged. A wrong rate that says so beats a silent one.</p>
         <div class="code"><div class="bar"><i></i><i></i><i></i>CurrencyConverter.java</div>
 <pre><code><span class="k">public double</span> <span class="f">toInr</span>(<span class="k">double</span> amount, String currency) {
     <span class="k">if</span> (currency == null || currency.isBlank() || <span class="s">"INR"</span>.equalsIgnoreCase(currency)) {
         <span class="k">return</span> amount;
     }
-    <span class="k">double</span> rate = getRateToInr(currency.toUpperCase());
+    String code = currency.toUpperCase();
+    <span class="k">double</span> rate = approximateRateToInr(code);
+    log.warn(<span class="s">"Offer priced in {} instead of INR; converting at a fixed approximate rate of {}"</span>, code, rate);
     <span class="k">return</span> amount * rate;
-}
-
-<span class="k">private double</span> <span class="f">getRateToInr</span>(String currency) {
-    <span class="k">return</span> cache.computeIfAbsent(currency, <span class="k">this</span>::fetchRate);
 }</code></pre></div>
       </section>
 
@@ -153,17 +151,18 @@ allDeals.sort(Comparator.comparingDouble(FlightDeal::priceInr));</code></pre></d
         <h2><span class="n">05</span>Tests</h2>
         <p>The unit tests pin down the parts that decide whether a fare counts as a deal: currency conversion and configuration defaults.</p>
         <div class="code"><div class="bar"><i></i><i></i><i></i>CurrencyConverterTest.java</div>
-<pre><code><span class="k">@Test</span>
-<span class="k">void</span> <span class="f">convertsInrAsIdentity</span>() {
-    CurrencyConverter converter = <span class="k">new</span> CurrencyConverter(HttpClient.newHttpClient(), <span class="s">"https://test.api.amadeus.com"</span>);
-    assertEquals(15000, converter.toInr(15000, <span class="s">"INR"</span>), 0.01);
+<pre><code><span class="k">private final</span> CurrencyConverter converter = <span class="k">new</span> CurrencyConverter();
+
+<span class="k">@Test</span>
+<span class="k">void</span> <span class="f">convertsKnownCurrenciesAtFixedRates</span>() {
+    assertEquals(9000, converter.toInr(100, <span class="s">"EUR"</span>), 0.01);
+    assertEquals(8400, converter.toInr(100, <span class="s">"USD"</span>), 0.01);
+    assertEquals(10600, converter.toInr(100, <span class="s">"GBP"</span>), 0.01);
 }
 
 <span class="k">@Test</span>
-<span class="k">void</span> <span class="f">convertsEurUsingFallbackRate</span>() {
-    CurrencyConverter converter = <span class="k">new</span> CurrencyConverter(HttpClient.newHttpClient(), <span class="s">"https://test.api.amadeus.com"</span>);
-    <span class="k">double</span> inr = converter.toInr(100, <span class="s">"EUR"</span>);
-    assertEquals(9000, inr, 0.01);
+<span class="k">void</span> <span class="f">unknownCurrencyFallsBackToEurRate</span>() {
+    assertEquals(9000, converter.toInr(100, <span class="s">"CHF"</span>), 0.01);
 }</code></pre></div>
         <p><code>AppConfigTest</code> checks that a minimal properties file falls back to the ₹20,000 threshold and the seven origin airports, with DEL first.</p>
         <div class="callout"><span class="label">The testing idea</span><p>Test the decision, not the network. Whether ₹18,450 is a deal depends on conversion and threshold logic that runs offline, so those get unit tests. The <code>HttpClient</code> is passed in through the constructor, which leaves room to stub the API and cover the 401 and non-200 paths next.</p></div>
